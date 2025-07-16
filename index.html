@@ -1,0 +1,199 @@
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<title>Ransomware Detection Dashboard</title>
+<meta name="viewport" content="width=device-width, initial-scale=1"
+/>
+<link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min
+.css" rel="stylesheet" />
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<style> body {
+font-family: 'Segoe UI', sans-serif; background-color: #121212;
+
+color: #fff;
+transition: background 0.5s, color 0.5s;
+}
+.card, .chart-container { border-radius: 10px; background-color: #1e1e1e;
+box-shadow: 0 5px 15px rgba(0,0,0,0.3); padding: 15px;
+margin-bottom: 20px; animation: fadeIn 0.8s ease;
+}
+.input-group input, .input-group button { border-radius: 10px;
+}
+.theme-toggle { position: absolute; top: 20px;
+right: 20px;
+}
+.chart-container canvas { max-height: 200px;
+}
+.light-mode {
+background-color: #f8f9fa !important; color: #000 !important;
+}
+.light-mode .card, .light-mode .chart-container, .light-mode .list-group- item {
+background-color: #ffffff !important;
+
+color: #000 !important;
+}
+@keyframes fadeIn {
+from { opacity: 0; transform: translateY(20px); } to { opacity: 1; transform: translateY(0); }
+}
+</style>
+</head>
+<body id="body" class="theme-dark">
+<div class="container py-4">
+<button	class="btn	btn-outline-light	theme-toggle" onclick="toggleTheme()">◻ / ☀</button>
+<h3	class="text-center	mb-4">◻	Ransomware	Detection Dashboard</h3>
+
+<!-- ◻ Hash Checker -->
+<div class="card">
+<form method="post" action="/hashcheck">
+<div class="input-group">
+<input	type="text"	name="hash_input"	class="form-control" placeholder="Enter MD5 hash..." required />
+<button class="btn btn-secondary" type="submit">Check</button>
+</div>
+</form>
+{% if hash_result %}
+<div	class="mt-3	alert	alert-info	text-center">◻	Prediction:
+<strong>{{ hash_result }}</strong></div>
+{% endif %}
+</div>
+
+<!-- ◻ File Upload -->
+<form method="post" enctype="multipart/form-data">
+<div class="card">
+<div class="input-group">
+<input type="file" name="file" class="form-control" accept=".csv" required />
+<button class="btn btn-primary" type="submit">Upload</button>
+</div>
+</div>
+</form>
+
+<!-- ◻ Best Model -->
+{% if best_model_name %}
+<div class="card text-center">
+<h6>◻ Best Model</h6>
+<h5 class="text-success">{{ best_model_name }}</h5>
+<small	class="text-muted">Accuracy:
+{{ best_model_score }}%</small>
+</div>
+{% endif %}
+
+
+<!-- ◻ Prediction Results -->
+{% if result %}
+<div class="row text-center">
+<div class="col-md-6">
+<div class="card">
+<small>Benign Count</small>
+<h4>{{ result['Benign'] }}</h4>
+
+</div>
+</div>
+<div class="col-md-6">
+<div class="card">
+<small>Malicious Count</small>
+<h4>{{ result['Malicious'] }}</h4>
+</div>
+</div>
+</div>
+
+<!-- ◻ Accuracy & Confidence Visuals -->
+<div class="row">
+<div class="col-md-6">
+<div class="chart-container">
+<h6 class="text-center">◻ Malicious vs Benign (Pie)</h6>
+<canvas id="pieChart"></canvas>
+</div>
+</div>
+<div class="col-md-6">
+<div class="chart-container">
+<h6 class="text-center">◻ Confidence Score</h6>
+<canvas id="barChart"></canvas>
+</div>
+</div>
+</div>
+
+<!-- ◻ Model Accuracy Chart -->
+{% if model_scores %}
+<div class="chart-container">
+
+<h6 class="text-center">◻ Model Accuracy Comparison</h6>
+<canvas id="modelChart"></canvas>
+</div>
+{% endif %}
+{% endif %}
+
+
+<!-- ◻ Top Predictions -->
+{% if hash_predictions %}
+<div class="card">
+<h6>Top Hash Predictions</h6>
+<ul class="list-group list-group-flush small">
+{% for item in hash_predictions %}
+<li class="list-group-item d-flex justify-content-between">
+{{ item.hash }}
+<span class="badge bg-{{ 'success' if item.prediction == 'Benign' else 'danger' }}">{{ item.prediction }}</span>
+</li>
+{% endfor %}
+</ul>
+</div>
+{% endif %}
+</div>
+
+<!-- Theme Toggle Script -->
+<script>
+function toggleTheme() { document.getElementById('body').classList.toggle('light-mode');
+}
+</script>
+
+<!-- Chart JS Scripts -->
+<script>
+{% if result %}
+const resultData = {{ result | tojson }};
+const modelScores = {{ model_scores | tojson if model_scores else 'null' }};
+const bestModel = "{{ best_model_name }}";
+
+
+new Chart(document.getElementById('pieChart'), { type: 'pie',
+data: {
+labels: ['Benign', 'Malicious'], datasets: [{
+data: [resultData.Benign, resultData.Malicious], backgroundColor: ['#28a745', '#dc3545']
+}]
+}
+});
+
+new Chart(document.getElementById('barChart'), { type: 'bar',
+data: {
+labels: ['Benign', 'Malicious'], datasets: [{
+label: 'Confidence', data: [
+resultData.Benign / (resultData.Benign + resultData.Malicious), resultData.Malicious / (resultData.Benign + resultData.Malicious)
+
+],
+backgroundColor: ['#28a745', '#dc3545']
+}]
+},
+options: {
+scales: { y: { beginAtZero: true, max: 1 } }
+}
+});
+
+
+if (modelScores) {
+new Chart(document.getElementById('modelChart'), { type: 'bar',
+data: {
+labels: Object.keys(modelScores), datasets: [{
+label: 'Accuracy (%)',
+data: Object.values(modelScores),
+backgroundColor: Object.keys(modelScores).map(name => name === bestModel ? '#28a745' : '#6c757d')
+}]
+},
+options: {
+scales: { y: { beginAtZero: true, max: 100 } }
+}
+});
+}
+{% endif %}
+</script>
+</body>
+
+</html>
